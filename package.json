@@ -1,21 +1,28 @@
 {
-  "name": "@rethink-js/rt-*",
+  "name": "@rethink-js/rt-slider",
   "version": "1.0.0",
-  "description": "",
+  "description": "A lightweight, touch-friendly slider with smooth inertia scrolling and native fallback.",
   "keywords": [
     "javascript",
-    "rethink-js"
+    "rethink-js",
+    "slider",
+    "carousel",
+    "scroller",
+    "draggable",
+    "inertia",
+    "smooth-scroll",
+    "lenis"
   ],
   "author": "Rethink JS <opensource@rethink-js.org> (https://github.com/Rethink-JS)",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Rethink-JS/rt-*.git"
+    "url": "git+https://github.com/Rethink-JS/rt-slider.git"
   },
   "bugs": {
-    "url": "https://github.com/Rethink-JS/rt-*/issues"
+    "url": "https://github.com/Rethink-JS/rt-slider/issues"
   },
-  "homepage": "https://github.com/Rethink-JS/rt-*#readme",
+  "homepage": "https://github.com/Rethink-JS/rt-slider#readme",
   "main": "dist/index.js",
   "unpkg": "dist/index.min.js",
   "jsdelivr": "dist/index.min.js",

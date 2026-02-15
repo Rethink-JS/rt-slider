@@ -1,23 +1,23 @@
-# rt-package-name
+# rt-slider
 
 ![Platform: Web](https://img.shields.io/badge/platform-web-000000)
 ![JavaScript](https://img.shields.io/badge/language-JavaScript-F7DF1E?logo=javascript)
-[![npm version](https://img.shields.io/npm/v/%40rethink-js%2Frt-<package-name>.svg)](https://www.npmjs.com/package/@rethink-js/rt-<package-name>)
-[![jsDelivr hits](https://data.jsdelivr.com/v1/package/npm/@rethink-js/rt-<package-name>/badge)](https://www.jsdelivr.com/package/npm/@rethink-js/rt-<package-name>)
-[![bundle size](https://img.shields.io/bundlephobia/min/%40rethink-js%2Frt-<package-name>)](https://bundlephobia.com/package/@rethink-js/rt-<package-name>)
+[![npm version](https://img.shields.io/npm/v/%40rethink-js%2Frt-slider.svg)](https://www.npmjs.com/package/@rethink-js/rt-slider)
+[![jsDelivr hits](https://data.jsdelivr.com/v1/package/npm/@rethink-js/rt-slider/badge)](https://www.jsdelivr.com/package/npm/@rethink-js/rt-slider)
+[![bundle size](https://img.shields.io/bundlephobia/min/%40rethink-js%2Frt-slider)](https://bundlephobia.com/package/@rethink-js/rt-slider)
 [![License: MIT](https://img.shields.io/badge/License-MIT-FFD632.svg)](https://opensource.org/licenses/MIT)
 
-`rt-package-name` is a lightweight JavaScript utility that <one-sentence clear purpose> with:
+`rt-slider` is a lightweight JavaScript utility that creates touch-friendly sliders with smooth inertia scrolling and physics with:
 
-- **Automatic dependency loading** (no manual installs)
-- **Zero-config defaults** (works out of the box)
+- **Automatic dependency loading** (loads Lenis automatically)
+- **Zero-config defaults** (works out of the box with basic selectors)
 - Attribute-driven configuration
 - Support for **multiple instances**
-- A clean global API under `window.rt<PackageName>`
-- Defensive fallbacks to avoid runtime crashes
+- A clean global API under `window.rtSlider`
+- Defensive fallbacks to native scrolling on mobile
 - Clear console logs for debugging and verification
 
-**Primary dependency (GitHub):** <https://github.com/author/repo>
+**Primary dependency (GitHub):** <https://github.com/darkroomengineering/lenis>
 
 ---
 
@@ -42,13 +42,14 @@
 ### 1.1 CDN (jsDelivr)
 
 ```html
-<script src="https://cdn.jsdelivr.net/npm/@rethink-js/rt-<package-name>@latest/dist/index.min.js"></script>
+<script src="[https://cdn.jsdelivr.net/npm/@rethink-js/rt-slider@latest/dist/index.min.js](https://cdn.jsdelivr.net/npm/@rethink-js/rt-slider@latest/dist/index.min.js)"></script>
 ```
 
 ### 1.2 npm
 
 ```bash
-npm install @rethink-js/rt-<package-name>
+npm install @rethink-js/rt-slider
+
 ```
 
 Then bundle or load `dist/index.min.js` as appropriate for your build setup.
@@ -57,20 +58,29 @@ Then bundle or load `dist/index.min.js` as appropriate for your build setup.
 
 ## 2. Quick Start
 
-Add the script to your page. With no configuration provided, `rt-<package-name>` will:
+Add the script to your page. To create a slider, add the `data-rt-slider` attribute to a container and specify the child selectors.
 
-* Auto-initialize itself when applicable
-* Load required dependencies dynamically
-* Apply safe defaults
-* Expose the global API
+`rt-slider` will:
+
+- Auto-initialize on DOM ready
+- Load Lenis dynamically for desktop inertia
+- Apply native touch scrolling styles for mobile
 
 Example:
 
 ```html
-<script src="https://cdn.jsdelivr.net/npm/@rethink-js/rt-<package-name>@latest/dist/index.min.js"></script>
+<div data-rt-slider data-rt-list=".cms-list" data-rt-item=".cms-item">
+  <div class="cms-list">
+    <div class="cms-item">Slide 1</div>
+    <div class="cms-item">Slide 2</div>
+    <div class="cms-item">Slide 3</div>
+  </div>
+</div>
+
+<script src="[https://cdn.jsdelivr.net/npm/@rethink-js/rt-slider@latest/dist/index.min.js](https://cdn.jsdelivr.net/npm/@rethink-js/rt-slider@latest/dist/index.min.js)"></script>
 ```
 
-> Note: If you do not provide any `rt-<package-name>-*` attributes, the library runs using its internal defaults.
+> Note: If you do not provide `data-rt-list` and `data-rt-item`, the slider will not initialize.
 
 ---
 
@@ -78,93 +88,109 @@ Example:
 
 The library activates when **any** of the following are true:
 
-* A root attribute exists (e.g. `rt-<package-name>` on `<html>` or `<body>`)
-* One or more instance elements are detected
-* No explicit opt-out is defined (auto-enable fallback)
+- An element with the attribute `data-rt-slider` is found in the DOM.
+- The required `data-rt-list` and `data-rt-item` selectors resolve to valid elements within that container.
 
-If none are found, the library may defensively attach itself to a sensible default to ensure functionality.
+If these conditions are met, the library initializes the instance automatically.
 
 ---
 
 ## 4. Configuration (HTML Attributes)
 
-### Root Activation
+### Basic Setup
 
 ```html
-<body rt-<package-name></body>
+<div data-rt-slider data-rt-list=".list-class" data-rt-item=".item-class">
+  ...
+</div>
 ```
 
-### Global Options
-
-```html
-<body
-  rt-<package-name>
-  rt-<package-name>-option-a="value"
-  rt-<package-name>-option-b="value"
-></body>
-```
-
-### Core Attributes
-
-| Attribute                   | Description            |
-| --------------------------- | ---------------------- |
-| `rt-<package-name>`         | Enables root behavior  |
-| `rt-<package-name>-id`      | Optional identifier    |
-| `rt-<package-name>-enabled` | Enable / disable       |
-| `rt-<package-name>-debug`   | Enable console logging |
-
-(Add / remove rows as required per package.)
-
----
-
-### Per-Instance Configuration
+### UI Controls (Optional)
 
 ```html
 <div
-  rt-<package-name>-instance
-  rt-<package-name>-id="example"
+  data-rt-slider
+  data-rt-btn-prev=".prev-button"
+  data-rt-btn-next=".next-button"
+  data-rt-scroll-bar=".custom-scrollbar"
+  data-rt-scroll-track=".custom-track"
+>
+  ...
+</div>
+```
+
+### Core Attributes (Selectors)
+
+| Attribute              | Description                                     | Required |
+| ---------------------- | ----------------------------------------------- | -------- |
+| `data-rt-slider`       | Activates the slider instance                   | **Yes**  |
+| `data-rt-slider-id`    | Optional identifier (auto-generated if missing) | No       |
+| `data-rt-list`         | Selector for the scrollable wrapper             | **Yes**  |
+| `data-rt-item`         | Selector for individual slides                  | **Yes**  |
+| `data-rt-spacer`       | Selector/Class for edge spacers (padding)       | No       |
+| `data-rt-btn-prev`     | Selector for "Previous" button                  | No       |
+| `data-rt-btn-next`     | Selector for "Next" button                      | No       |
+| `data-rt-scroll-track` | Selector for custom scrollbar track             | No       |
+| `data-rt-scroll-bar`   | Selector for custom scrollbar thumb             | No       |
+
+---
+
+### Physics & Behavior Configuration
+
+These attributes control the Lenis instance used on desktop.
+
+```html
+<div
+  data-rt-slider
+  data-rt-slider-lerp="0.1"
+  data-rt-slider-infinite="false"
 ></div>
 ```
 
-| Attribute                    | Description            |
-| ---------------------------- | ---------------------- |
-| `rt-<package-name>-instance` | Marks instance element |
-| `rt-<package-name>-id`       | Instance identifier    |
+| Attribute                     | Description                            | Default       |
+| ----------------------------- | -------------------------------------- | ------------- |
+| `data-rt-slider-lerp`         | Inertia interpolation (lower = slower) | `0.1`         |
+| `data-rt-slider-duration`     | Scroll duration (alt to lerp)          | `1.2`         |
+| `data-rt-slider-easing`       | Easing function (e.g., `easeOutExpo`)  | `easeOutQuad` |
+| `data-rt-slider-orientation`  | Scroll orientation                     | `horizontal`  |
+| `data-rt-slider-smooth-wheel` | Enable mouse wheel smoothing           | `true`        |
+| `data-rt-slider-infinite`     | Infinite scrolling                     | `false`       |
+| `data-rt-slider-auto-resize`  | Recalculate on window resize           | `true`        |
 
 ---
 
 ### Advanced JSON Options
 
 ```html
-<body
-  rt-<package-name>
-  rt-<package-name>-options-json='{"key":"value"}'
-></body>
+<div
+  data-rt-slider
+  data-rt-slider-options-json='{"lerp":0.05, "wheelMultiplier": 2}'
+></div>
 ```
 
-Used for advanced or dependency-specific configuration that doesn’t warrant individual attributes.
+Used to pass complex configuration objects directly to the underlying Lenis instance.
 
 ---
 
 ### Dependency Loader Overrides
 
-| Attribute                             | Description             |
-| ------------------------------------- | ----------------------- |
-| `rt-<package-name>-src`               | Override dependency CDN |
-| `rt-<package-name>-observe-resize`    | Enable ResizeObserver   |
-| `rt-<package-name>-observe-mutations` | Enable MutationObserver |
+The library automatically loads Lenis from a CDN if not present. You can rely on the default or load your own version before `rt-slider`.
+
+| Attribute              | Description                                         |
+| ---------------------- | --------------------------------------------------- |
+| `data-rt-lenis="true"` | Add this to a script tag to identify external Lenis |
 
 ---
 
 ## 5. Multiple Instances
 
-`rt-<package-name>` supports multiple independent instances on the same page.
+`rt-slider` supports multiple independent instances on the same page.
 
 Each instance:
 
-* Has its own configuration
-* Is registered internally
-* Can be controlled individually via the API
+- Has its own independent scroll physics.
+- Calculates its own progress bars and button states.
+- Is registered internally with a unique ID.
 
 ---
 
@@ -173,60 +199,56 @@ Each instance:
 Once initialized:
 
 ```js
-window.rt<PackageName>;
+window.rtSlider;
 ```
 
 ### Common Methods
 
-| Method         | Description          |
-| -------------- | -------------------- |
-| `ids()`        | Returns instance IDs |
-| `get(id)`      | Get instance         |
-| `start(id?)`   | Start                |
-| `stop(id?)`    | Stop                 |
-| `toggle(id?)`  | Toggle               |
-| `destroy(id?)` | Cleanup              |
+| Method         | Description                                      |
+| -------------- | ------------------------------------------------ |
+| `ids()`        | Returns an array of active slider IDs            |
+| `get(id)`      | Returns the slider instance object               |
+| `refresh()`    | Forces a recalculation of layout (all instances) |
+| `destroy(id?)` | Destroys specific instance or all if no ID given |
 
-If a root instance exists, it may also be exposed directly:
+Example usage:
 
 ```js
-window.<dependencyName>;
+// Refresh layout after an AJAX load
+window.rtSlider.refresh();
+
+// Destroy a specific slider
+window.rtSlider.destroy("my-slider-id");
 ```
 
 ---
 
 ## 7. Console Logging
 
-When enabled, the library logs:
+`rt-slider` operates silently by default but provides warnings if:
 
-* Instance ID
-* Target element
-* Resolved configuration
-* Dependency load status
-
-This makes debugging transparent and predictable.
+- Required selectors (`data-rt-list`, `data-rt-item`) are missing.
+- JSON configuration is invalid.
+- Dependency loading fails.
 
 ---
 
 ## 8. Troubleshooting
 
-### Feature not activating
+### Slider not initializing
 
-* Ensure the correct `rt-*` attribute exists
-* Confirm the script loaded successfully
-* Check console logs for resolved config
+- Ensure `data-rt-slider` is present on the parent.
+- **Crucial:** Ensure `data-rt-list` and `data-rt-item` attributes match valid elements inside the container.
 
-### Dependency failed to load
+### Buttons not working
 
-* Verify CDN URLs
-* Ensure network access
-* Override source via attribute if required
+- Ensure the selectors in `data-rt-btn-prev` match your button elements.
+- If buttons are outside the slider container, give them the attribute `data-rt-slider-for="slider-id"`.
 
-### Unexpected behavior
+### Scrollbar not moving
 
-* Check for conflicting scripts
-* Verify attribute spelling
-* Confirm instance isolation
+- Ensure `data-rt-scroll-track` and `data-rt-scroll-bar` are set correctly.
+- The "bar" must be a child of the "track" in the DOM for standard styling, though the logic handles positioning.
 
 ---
 
@@ -234,8 +256,8 @@ This makes debugging transparent and predictable.
 
 MIT License
 
-Package: `@rethink-js/rt-<package-name>` <br>
-GitHub: [https://github.com/Rethink-JS/rt-package-name](https://github.com/Rethink-JS/rt-package-name)
+Package: `@rethink-js/rt-slider` <br>
+GitHub: [https://github.com/Rethink-JS/rt-slider](https://github.com/Rethink-JS/rt-slider)
 
 ---
 
