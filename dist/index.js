@@ -1,4 +1,4 @@
-/*! @rethink-js/rt-slider v1.0.0 | MIT */
+/*! @rethink-js/rt-slider v1.1.0 | MIT */
 (() => {
   // src/index.js
   (function() {
@@ -9,7 +9,7 @@
       if (typeof window.Lenis !== "undefined") return Promise.resolve();
       if (lenisLoadingPromise) return lenisLoadingPromise;
       lenisLoadingPromise = new Promise(function(resolve, reject) {
-        var existing = document.querySelector('script[data-rt-lenis="true"]') || document.querySelector('script[src*="lenis"]');
+        var existing = document.querySelector('script[data-rt-slider-lenis="true"]') || document.querySelector('script[src*="lenis"]');
         if (existing) {
           if (typeof window.Lenis !== "undefined") {
             resolve();
@@ -25,7 +25,7 @@
           var s = document.createElement("script");
           s.src = "https://cdn.jsdelivr.net/npm/lenis@1.3.16/dist/lenis.min.js";
           s.async = true;
-          s.dataset.rtLenis = "true";
+          s.setAttribute("data-rt-slider-lenis", "true");
           s.onload = function() {
             resolve();
           };
@@ -73,17 +73,21 @@
       return el.getAttribute(attr);
     }
     function injectOnce(key, css) {
-      var s = document.head.querySelector('[data-rt-injected="' + key + '"]');
+      var s = document.head.querySelector(
+        '[data-rt-slider-injected="' + key + '"]'
+      );
       if (!s) {
         s = document.createElement("style");
-        s.setAttribute("data-rt-injected", key);
+        s.setAttribute("data-rt-slider-injected", key);
         document.head.appendChild(s);
       }
       if (s.textContent !== css) s.textContent = css;
       return s;
     }
     function removeInjected(key) {
-      var s = document.head.querySelector('[data-rt-injected="' + key + '"]');
+      var s = document.head.querySelector(
+        '[data-rt-slider-injected="' + key + '"]'
+      );
       if (s && s.parentNode) s.parentNode.removeChild(s);
     }
     function toSel(v) {
@@ -603,14 +607,58 @@
       var mr = parseFloat(cs.marginRight) || 0;
       return Math.max(1, Math.round(w + mr));
     };
-    Slider.prototype.scrollByItems = function(n) {
-      var step = this.itemStepWidth();
-      var target = n > 0 ? this.scroller.scrollLeft + step * n : this.scroller.scrollLeft - step * Math.abs(n);
-      var clamped = this.safeClampScroll(target);
+    Slider.prototype.getAlignTargetLeft = function() {
+      var ref = this.pickVisibleMarginRef();
+      if (ref) {
+        return ref.getBoundingClientRect().left;
+      }
+      var sRect = this.scroller.getBoundingClientRect();
+      var scrollerCS = getComputedStyle(this.scroller);
+      var listCS = getComputedStyle(this.list);
+      var scrollerBorderL = parseFloat(scrollerCS.borderLeftWidth || "0") || 0;
+      var scrollerPadL = parseFloat(scrollerCS.paddingLeft || "0") || 0;
+      var listPadL = parseFloat(listCS.paddingLeft || "0") || 0;
+      var gutter = Number.isFinite(this._lastGutterPx) ? this._lastGutterPx : 0;
+      return sRect.left + scrollerBorderL + scrollerPadL + listPadL + gutter;
+    };
+    Slider.prototype.getOrderedItems = function() {
+      if (!this.conf.item) return [];
+      var nodes = Array.from(this.list.querySelectorAll(this.conf.item));
+      return nodes.filter(function(n) {
+        return n && n.nodeType === 1;
+      });
+    };
+    Slider.prototype.getCurrentItemIndex = function(items) {
+      if (!items || !items.length) return -1;
+      var alignLeft = this.getAlignTargetLeft();
+      var bestIdx = 0;
+      var bestAbs = Infinity;
+      for (var i = 0; i < items.length; i++) {
+        var r = items[i].getBoundingClientRect();
+        var d = r.left - alignLeft;
+        var ad = Math.abs(d);
+        if (ad < bestAbs) {
+          bestAbs = ad;
+          bestIdx = i;
+        }
+      }
+      return bestIdx;
+    };
+    Slider.prototype.scrollAlignToItem = function(el) {
+      if (!el) return;
+      var total = this.scroller.scrollWidth;
+      var visible = this.scroller.clientWidth;
+      if (total <= visible + 1) return;
+      var alignLeft = this.getAlignTargetLeft();
+      var r = el.getBoundingClientRect();
+      var delta = r.left - alignLeft;
+      if (!Number.isFinite(delta)) return;
+      var target = this.safeClampScroll(this.scroller.scrollLeft + delta);
       if (this.lenis) {
+        var duration = 1.2;
         try {
-          this.lenis.scrollTo(clamped, {
-            duration: 1.2,
+          this.lenis.scrollTo(target, {
+            duration,
             easing: function(t) {
               return Math.min(1, 1.001 - Math.pow(2, -10 * t));
             },
@@ -619,11 +667,46 @@
             force: true
           });
         } catch (e) {
-          this.scroller.scrollTo({ left: clamped, behavior: "smooth" });
+          this.scroller.scrollTo({ left: target, behavior: "smooth" });
         }
       } else {
-        this.scroller.scrollTo({ left: clamped, behavior: "smooth" });
+        this.scroller.scrollTo({ left: target, behavior: "smooth" });
       }
+    };
+    Slider.prototype.scrollByItems = function(n) {
+      var total = this.scroller.scrollWidth;
+      var visible = this.scroller.clientWidth;
+      if (total <= visible + 1) return;
+      var items = this.getOrderedItems();
+      if (!items.length) {
+        var step = this.itemStepWidth();
+        var fallback = n > 0 ? this.scroller.scrollLeft + step * n : this.scroller.scrollLeft - step * Math.abs(n);
+        var clamped = this.safeClampScroll(fallback);
+        if (this.lenis) {
+          try {
+            this.lenis.scrollTo(clamped, {
+              duration: 1.2,
+              easing: function(t) {
+                return Math.min(1, 1.001 - Math.pow(2, -10 * t));
+              },
+              immediate: false,
+              lock: false,
+              force: true
+            });
+          } catch (e) {
+            this.scroller.scrollTo({ left: clamped, behavior: "smooth" });
+          }
+        } else {
+          this.scroller.scrollTo({ left: clamped, behavior: "smooth" });
+        }
+        return;
+      }
+      var curIdx = this.getCurrentItemIndex(items);
+      if (curIdx < 0) curIdx = 0;
+      var nextIdx = curIdx;
+      if (n > 0) nextIdx = Math.min(items.length - 1, curIdx + 1);
+      else if (n < 0) nextIdx = Math.max(0, curIdx - 1);
+      this.scrollAlignToItem(items[nextIdx]);
     };
     Slider.prototype.onPrevClick = function(e) {
       e.preventDefault();
@@ -966,22 +1049,22 @@
       );
     };
     Slider.prototype.applyListStyles = function() {
-      var listUID = assignUID(this.list, "data-rt-ss-id");
-      var scrollerUID = assignUID(this.scroller, "data-rt-ss-scroller-id");
+      var listUID = assignUID(this.list, "data-rt-slider-list-uid");
+      var scrollerUID = assignUID(this.scroller, "data-rt-slider-scroller-uid");
       var isDesktop = this.mq.matches;
       var scrollbarStyles = "";
       if (this.scrollTrack && this.scrollBar) {
-        var trackUID = assignUID(this.scrollTrack, "data-rt-track-id");
-        var barUID = assignUID(this.scrollBar, "data-rt-bar-id");
+        var trackUID = assignUID(this.scrollTrack, "data-rt-slider-track-uid");
+        var barUID = assignUID(this.scrollBar, "data-rt-slider-bar-uid");
         if (isDesktop) {
-          scrollbarStyles = '[data-rt-track-id="' + trackUID + '"]{position:relative; touch-action:none; overflow: visible !important;}[data-rt-track-id="' + trackUID + '"]::before{content:"";position:absolute;top:-30px;bottom:-30px;left:0;right:0;z-index:0; cursor:pointer; pointer-events:auto;}[data-rt-bar-id="' + barUID + '"]{position:relative; z-index:2; touch-action:none;}[data-rt-bar-id="' + barUID + '"]::after{content:"";position:absolute;top:-30px;bottom:-30px;left:0;right:0;z-index:3; cursor:grab; pointer-events:auto;}';
+          scrollbarStyles = '[data-rt-slider-track-uid="' + trackUID + '"]{position:relative; touch-action:none; overflow: visible !important;}[data-rt-slider-track-uid="' + trackUID + '"]::before{content:"";position:absolute;top:-30px;bottom:-30px;left:0;right:0;z-index:0; cursor:pointer; pointer-events:auto;}[data-rt-slider-bar-uid="' + barUID + '"]{position:relative; z-index:2; touch-action:none;}[data-rt-slider-bar-uid="' + barUID + '"]::after{content:"";position:absolute;top:-30px;bottom:-30px;left:0;right:0;z-index:3; cursor:grab; pointer-events:auto;}';
         } else {
-          scrollbarStyles = '[data-rt-track-id="' + trackUID + '"]{position:relative; touch-action:auto; overflow: visible !important; pointer-events:none !important; user-select:none !important;}[data-rt-track-id="' + trackUID + '"]::before{content:"";position:absolute;top:-30px;bottom:-30px;left:0;right:0;z-index:0; pointer-events:none !important;}[data-rt-bar-id="' + barUID + '"]{position:relative; z-index:2; touch-action:auto; pointer-events:none !important; user-select:none !important;}[data-rt-bar-id="' + barUID + '"]::after{content:"";position:absolute;top:-30px;bottom:-30px;left:0;right:0;z-index:3; pointer-events:none !important;}';
+          scrollbarStyles = '[data-rt-slider-track-uid="' + trackUID + '"]{position:relative; touch-action:auto; overflow: visible !important; pointer-events:none !important; user-select:none !important;}[data-rt-slider-track-uid="' + trackUID + '"]::before{content:"";position:absolute;top:-30px;bottom:-30px;left:0;right:0;z-index:0; pointer-events:none !important;}[data-rt-slider-bar-uid="' + barUID + '"]{position:relative; z-index:2; touch-action:auto; pointer-events:none !important; user-select:none !important;}[data-rt-slider-bar-uid="' + barUID + '"]::after{content:"";position:absolute;top:-30px;bottom:-30px;left:0;right:0;z-index:3; pointer-events:none !important;}';
         }
       }
-      var hideNativeScrollbarCSS = '[data-rt-ss-id="' + listUID + '"]::-webkit-scrollbar{width:0 !important;height:0 !important;display:none !important;background:transparent !important;}[data-rt-ss-id="' + listUID + '"]::-webkit-scrollbar-thumb{background:transparent !important;}[data-rt-ss-id="' + listUID + '"]::-webkit-scrollbar-track{background:transparent !important;}[data-rt-ss-id="' + listUID + '"]{scrollbar-width:none !important;-ms-overflow-style:none !important;}[data-rt-ss-scroller-id="' + scrollerUID + '"]::-webkit-scrollbar{width:0 !important;height:0 !important;display:none !important;background:transparent !important;}[data-rt-ss-scroller-id="' + scrollerUID + '"]::-webkit-scrollbar-thumb{background:transparent !important;}[data-rt-ss-scroller-id="' + scrollerUID + '"]::-webkit-scrollbar-track{background:transparent !important;}[data-rt-ss-scroller-id="' + scrollerUID + '"]{scrollbar-width:none !important;-ms-overflow-style:none !important;}';
-      var iosMaskCSS = isDesktop ? "" : '[data-rt-ss-scroller-id="' + scrollerUID + '"]{position:relative;padding-bottom:calc(var(--rt-slider-base-pb, 0px) + var(--rt-slider-mask-h, 12px));}[data-rt-ss-scroller-id="' + scrollerUID + '"]::after{content:"";position:absolute;left:0;right:0;bottom:0;height:var(--rt-slider-mask-h, 12px);pointer-events:none;z-index:2147483647;background:var(--rt-slider-mask-bg, transparent);}';
-      var draggingCSS = '[data-rt-ss-scroller-id="' + scrollerUID + '"].is-dragging{cursor:grabbing !important;user-select:none}[data-rt-ss-id="' + listUID + '"].is-dragging{cursor:grabbing !important;user-select:none}[data-rt-ss-scroller-id="' + scrollerUID + '"].is-dragging img,[data-rt-ss-scroller-id="' + scrollerUID + '"].is-dragging a,[data-rt-ss-scroller-id="' + scrollerUID + '"].is-dragging ' + this.conf.item + '{user-select:none;-webkit-user-drag:none}[data-rt-ss-id="' + listUID + '"] img{-webkit-user-drag:none}';
+      var hideNativeScrollbarCSS = '[data-rt-slider-list-uid="' + listUID + '"]::-webkit-scrollbar{width:0 !important;height:0 !important;display:none !important;background:transparent !important;}[data-rt-slider-list-uid="' + listUID + '"]::-webkit-scrollbar-thumb{background:transparent !important;}[data-rt-slider-list-uid="' + listUID + '"]::-webkit-scrollbar-track{background:transparent !important;}[data-rt-slider-list-uid="' + listUID + '"]{scrollbar-width:none !important;-ms-overflow-style:none !important;}[data-rt-slider-scroller-uid="' + scrollerUID + '"]::-webkit-scrollbar{width:0 !important;height:0 !important;display:none !important;background:transparent !important;}[data-rt-slider-scroller-uid="' + scrollerUID + '"]::-webkit-scrollbar-thumb{background:transparent !important;}[data-rt-slider-scroller-uid="' + scrollerUID + '"]::-webkit-scrollbar-track{background:transparent !important;}[data-rt-slider-scroller-uid="' + scrollerUID + '"]{scrollbar-width:none !important;-ms-overflow-style:none !important;}';
+      var iosMaskCSS = isDesktop ? "" : '[data-rt-slider-scroller-uid="' + scrollerUID + '"]{position:relative;padding-bottom:calc(var(--rt-slider-base-pb, 0px) + var(--rt-slider-mask-h, 12px));}[data-rt-slider-scroller-uid="' + scrollerUID + '"]::after{content:"";position:absolute;left:0;right:0;bottom:0;height:var(--rt-slider-mask-h, 12px);pointer-events:none;z-index:2147483647;background:var(--rt-slider-mask-bg, transparent);}';
+      var draggingCSS = '[data-rt-slider-scroller-uid="' + scrollerUID + '"].is-dragging{cursor:grabbing !important;user-select:none}[data-rt-slider-list-uid="' + listUID + '"].is-dragging{cursor:grabbing !important;user-select:none}[data-rt-slider-scroller-uid="' + scrollerUID + '"].is-dragging img,[data-rt-slider-scroller-uid="' + scrollerUID + '"].is-dragging a,[data-rt-slider-scroller-uid="' + scrollerUID + '"].is-dragging ' + this.conf.item + '{user-select:none;-webkit-user-drag:none}[data-rt-slider-list-uid="' + listUID + '"] img{-webkit-user-drag:none}';
       this._injectedKey = "rt-ss-" + listUID;
       injectOnce(
         this._injectedKey,
@@ -1106,11 +1189,11 @@
           this.scrollTrack.addEventListener("pointerdown", this._onTPD);
           this._onTPM = this.onTrackPointerMove.bind(this);
           this.scrollTrack.addEventListener("pointermove", this._onTPM);
-          this._onTPU = this.onTrackPointerUp.bind(this);
+          this._onTPU = this.endBarDrag.bind(this);
           this.scrollTrack.addEventListener("pointerup", this._onTPU);
-          this._onTPC = this.onTrackPointerCancel.bind(this);
+          this._onTPC = this.endBarDrag.bind(this);
           this.scrollTrack.addEventListener("pointercancel", this._onTPC);
-          this._onTPL = this.onTrackPointerCancel.bind(this);
+          this._onTPL = this.endBarDrag.bind(this);
           this.scrollTrack.addEventListener("pointerleave", this._onTPL);
         }
       } else {

@@ -4,7 +4,6 @@
 ![JavaScript](https://img.shields.io/badge/language-JavaScript-F7DF1E?logo=javascript)
 [![npm version](https://img.shields.io/npm/v/%40rethink-js%2Frt-slider.svg)](https://www.npmjs.com/package/@rethink-js/rt-slider)
 [![jsDelivr hits](https://data.jsdelivr.com/v1/package/npm/@rethink-js/rt-slider/badge)](https://www.jsdelivr.com/package/npm/@rethink-js/rt-slider)
-[![bundle size](https://img.shields.io/bundlephobia/min/%40rethink-js%2Frt-slider)](https://bundlephobia.com/package/@rethink-js/rt-slider)
 [![License: MIT](https://img.shields.io/badge/License-MIT-FFD632.svg)](https://opensource.org/licenses/MIT)
 
 `rt-slider` is a lightweight JavaScript utility that creates touch-friendly sliders with smooth inertia scrolling and physics with:
@@ -42,14 +41,13 @@
 ### 1.1 CDN (jsDelivr)
 
 ```html
-<script src="[https://cdn.jsdelivr.net/npm/@rethink-js/rt-slider@latest/dist/index.min.js](https://cdn.jsdelivr.net/npm/@rethink-js/rt-slider@latest/dist/index.min.js)"></script>
+<script src="https://cdn.jsdelivr.net/npm/@rethink-js/rt-slider@latest/dist/index.min.js"></script>
 ```
 
 ### 1.2 npm
 
 ```bash
 npm install @rethink-js/rt-slider
-
 ```
 
 Then bundle or load `dist/index.min.js` as appropriate for your build setup.
@@ -77,7 +75,7 @@ Example:
   </div>
 </div>
 
-<script src="[https://cdn.jsdelivr.net/npm/@rethink-js/rt-slider@latest/dist/index.min.js](https://cdn.jsdelivr.net/npm/@rethink-js/rt-slider@latest/dist/index.min.js)"></script>
+<script src="https://cdn.jsdelivr.net/npm/@rethink-js/rt-slider@latest/dist/index.min.js"></script>
 ```
 
 > Note: If you do not provide `data-rt-list` and `data-rt-item`, the slider will not initialize.
@@ -176,9 +174,9 @@ Used to pass complex configuration objects directly to the underlying Lenis inst
 
 The library automatically loads Lenis from a CDN if not present. You can rely on the default or load your own version before `rt-slider`.
 
-| Attribute              | Description                                         |
-| ---------------------- | --------------------------------------------------- |
-| `data-rt-lenis="true"` | Add this to a script tag to identify external Lenis |
+| Attribute                     | Description                                         |
+| ----------------------------- | --------------------------------------------------- |
+| `data-rt-slider-lenis="true"` | Add this to a script tag to identify external Lenis |
 
 ---
 
