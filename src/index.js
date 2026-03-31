@@ -386,7 +386,7 @@
   };
 
   Slider.prototype.scrollEdgeEpsilon = function () {
-    return Math.max(1, this.devicePixelEpsilon() * 2);
+    return Math.max(2, this.devicePixelEpsilon() * 4);
   };
 
   Slider.prototype.listGap = function () {
@@ -523,11 +523,13 @@
   };
 
   Slider.prototype.getLiveScrollMetrics = function () {
-    var max = this.maxScroll();
+    var scrollWidth = Math.max(0, this.scroller.scrollWidth || 0);
+    var clientWidth = Math.max(0, this.scroller.clientWidth || 0);
+    var max = Math.max(0, scrollWidth - clientWidth);
     var current = this.safeClampScroll(this.scroller.scrollLeft);
     var epsilon = this.scrollEdgeEpsilon();
 
-    if (max <= 0) {
+    if (max <= 0 || scrollWidth <= clientWidth + epsilon) {
       return {
         current: 0,
         max: 0,
@@ -538,18 +540,25 @@
       };
     }
 
-    if (current <= epsilon) current = 0;
-    if (current >= max - epsilon) current = max;
+    var atStart = current <= epsilon;
+    var atEnd =
+      current >= max - epsilon ||
+      current + clientWidth >= scrollWidth - epsilon;
 
-    var progress = clamp(current / max);
+    if (atStart) current = 0;
+    if (atEnd) current = max;
+
+    var progress = max > 0 ? clamp(current / max) : 0;
+    if (atEnd) progress = 1;
+    if (atStart) progress = 0;
 
     return {
       current: current,
       max: max,
       progress: progress,
       progressPercent: progress * 100,
-      isAtStart: current <= 0,
-      isAtEnd: current >= max,
+      isAtStart: atStart,
+      isAtEnd: atEnd,
     };
   };
 
@@ -684,7 +693,10 @@
       self._touchClampTimer = 0;
       var cur = self.scroller.scrollLeft;
       var max = self.maxScroll();
-      var eps = 1;
+      var clientWidth = Math.max(0, self.scroller.clientWidth || 0);
+      var scrollWidth = Math.max(0, self.scroller.scrollWidth || 0);
+      var eps = self.scrollEdgeEpsilon();
+
       if (!Number.isFinite(cur)) {
         self.scroller.scrollLeft = 0;
       } else if (cur < -eps || cur > max + eps) {
@@ -693,7 +705,12 @@
         self.scroller.scrollLeft = 0;
       } else if (cur > max) {
         self.scroller.scrollLeft = max;
+      } else if (cur <= eps) {
+        self.scroller.scrollLeft = 0;
+      } else if (cur + clientWidth >= scrollWidth - eps) {
+        self.scroller.scrollLeft = max;
       }
+
       self.updateScrollbar();
       self.updateButtons();
       self.updateOverlays();
