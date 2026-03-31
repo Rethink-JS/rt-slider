@@ -14,7 +14,7 @@
 - Support for **multiple instances**
 - A clean global API under `window.rtSlider`
 - Defensive fallbacks to native scrolling on mobile
-- Built-in **slide state tracking**, DOM attributes, and custom events for advanced UI sync
+- Built-in **slide state tracking**, **scroll progress tracking**, DOM attributes, and custom events for advanced UI sync
 
 **Primary dependency (GitHub):** <https://github.com/darkroomengineering/lenis>
 
@@ -63,7 +63,7 @@ Add the script to your page. To create a slider, add the `data-rt-slider` attrib
 - Auto-initialize on DOM ready
 - Load Lenis dynamically for desktop inertia
 - Apply native touch scrolling styles for mobile
-- Compute active slide state and progress automatically
+- Compute active slide state and overall scroll progress automatically
 - Expose slider state through attributes, events, and the global API
 
 Example:
@@ -192,9 +192,13 @@ As the slider moves, `rt-slider` writes state back to the DOM automatically.
 | `data-rt-slider-to-index`                 | Current segment end slide index            |
 | `data-rt-slider-segment-progress`         | Current segment progress from `0` to `1`   |
 | `data-rt-slider-segment-progress-percent` | Current segment progress from `0` to `100` |
+| `data-rt-slider-scroll-current`           | Current clamped horizontal scroll position |
+| `data-rt-slider-scroll-max`               | Maximum horizontal scroll position         |
 | `data-rt-slider-scroll-progress`          | Overall slider progress from `0` to `1`    |
 | `data-rt-slider-scroll-progress-percent`  | Overall slider progress from `0` to `100`  |
 | `data-rt-slider-scroll-direction`         | `forward`, `backward`, or `none`           |
+| `data-rt-slider-scroll-at-start`          | `true` when the slider is at the start     |
+| `data-rt-slider-scroll-at-end`            | `true` when the slider is at the end       |
 
 #### Per-item attributes
 
@@ -212,7 +216,7 @@ As the slider moves, `rt-slider` writes state back to the DOM automatically.
 | `data-rt-slider-item-anchor-progress-percent` | This slide's anchor position from `0` to `100`                             |
 | `data-rt-slider-item-distance`                | Distance in pixels from the current scroll position to this slide's anchor |
 
-These attributes are useful for CSS-driven animations, slide-aware UI, progress indicators, and syncing other interface elements to the slider.
+These attributes are useful for CSS-driven animations, slide-aware UI, progress indicators, edge-aware controls, and syncing other interface elements to the slider.
 
 ---
 
@@ -220,15 +224,20 @@ These attributes are useful for CSS-driven animations, slide-aware UI, progress 
 
 Each slider instance dispatches events from the root element.
 
-| Event             | Description                                 |
-| ----------------- | ------------------------------------------- |
-| `rtSlider:slide`  | Fires when the computed slide state changes |
-| `rtSlider:active` | Fires when the active slide index changes   |
+| Event               | Description                                 |
+| ------------------- | ------------------------------------------- |
+| `rtSlider:progress` | Fires when computed scroll progress changes |
+| `rtSlider:slide`    | Fires when the computed slide state changes |
+| `rtSlider:active`   | Fires when the active slide index changes   |
 
 Example:
 
 ```js
 const slider = document.querySelector("[data-rt-slider]");
+
+slider.addEventListener("rtSlider:progress", function (event) {
+  console.log("Progress:", event.detail.progress);
+});
 
 slider.addEventListener("rtSlider:slide", function (event) {
   console.log(event.detail);
@@ -239,7 +248,9 @@ slider.addEventListener("rtSlider:active", function (event) {
 });
 ```
 
-Both events include a full cloned slide-state object in `event.detail`.
+`rtSlider:progress` includes a cloned scroll-state object in `event.detail`.
+
+`rtSlider:slide` and `rtSlider:active` include a full cloned slide-state object in `event.detail`.
 
 ---
 
@@ -261,7 +272,7 @@ Each instance:
 
 - Has its own independent scroll physics
 - Calculates its own progress bars and button states
-- Tracks its own active slide and segment state
+- Tracks its own active slide, segment state, and overall scroll progress
 - Dispatches its own custom events
 - Is registered internally with a unique ID
 
@@ -277,13 +288,15 @@ window.rtSlider;
 
 ### Common Methods
 
-| Method              | Description                                         |
-| ------------------- | --------------------------------------------------- |
-| `ids()`             | Returns an array of active slider IDs               |
-| `get(id)`           | Returns the slider instance object                  |
-| `getSlideState(id)` | Returns a cloned slide-state object for an instance |
-| `refresh()`         | Forces a recalculation of layout (all instances)    |
-| `destroy(id?)`      | Destroys specific instance or all if no ID given    |
+| Method               | Description                                          |
+| -------------------- | ---------------------------------------------------- |
+| `ids()`              | Returns an array of active slider IDs                |
+| `get(id)`            | Returns the slider instance object                   |
+| `getSlideState(id)`  | Returns a cloned slide-state object for an instance  |
+| `getScrollState(id)` | Returns a cloned scroll-state object for an instance |
+| `getProgress(id)`    | Returns overall slider progress from `0` to `1`      |
+| `refresh()`          | Forces a recalculation of layout (all instances)     |
+| `destroy(id?)`       | Destroys specific instance or all if no ID given     |
 
 Example usage:
 
@@ -291,9 +304,11 @@ Example usage:
 // Refresh layout after an AJAX load
 window.rtSlider.refresh();
 
-// Get computed slide state
+// Get computed state
 const ids = window.rtSlider.ids();
-const firstSliderState = window.rtSlider.getSlideState(ids[0]);
+const firstSliderSlideState = window.rtSlider.getSlideState(ids[0]);
+const firstSliderScrollState = window.rtSlider.getScrollState(ids[0]);
+const firstSliderProgress = window.rtSlider.getProgress(ids[0]);
 
 // Destroy a specific slider
 window.rtSlider.destroy("my-slider-id");
@@ -303,11 +318,13 @@ window.rtSlider.destroy("my-slider-id");
 
 When using `window.rtSlider.get(id)`, each instance also exposes helper methods:
 
-| Method               | Description                                           |
-| -------------------- | ----------------------------------------------------- |
-| `getSlideState()`    | Returns a cloned slide-state object for that instance |
-| `getActiveIndex()`   | Returns the current active slide index                |
-| `getActiveElement()` | Returns the current active slide element              |
+| Method               | Description                                            |
+| -------------------- | ------------------------------------------------------ |
+| `getSlideState()`    | Returns a cloned slide-state object for that instance  |
+| `getScrollState()`   | Returns a cloned scroll-state object for that instance |
+| `getProgress()`      | Returns overall slider progress from `0` to `1`        |
+| `getActiveIndex()`   | Returns the current active slide index                 |
+| `getActiveElement()` | Returns the current active slide element               |
 
 ---
 
@@ -342,11 +359,17 @@ It does not rely on console output during normal use. If initialization fails, t
 - Ensure the slider is actually scrollable. If content does not overflow horizontally, active state will still resolve, but progress and movement-driven changes will be limited.
 - Ensure `data-rt-item` matches the actual slide elements and not a wrapper around them.
 
+### Progress not reaching `1` at the end
+
+- `rt-slider` uses edge-aware scroll detection and clamps progress to `1` when the visible viewport reaches the end of the slider.
+- If you are building custom progress indicators, use `window.rtSlider.getProgress(id)`, `window.rtSlider.getScrollState(id)`, or the `rtSlider:progress` event instead of deriving progress manually from raw DOM measurements.
+
 ### Custom events not firing as expected
 
+- `rtSlider:progress` fires when computed scroll progress changes.
 - `rtSlider:slide` fires when computed slide state changes.
 - `rtSlider:active` fires when the active slide changes.
-- Both events are dispatched from the element with `data-rt-slider`, not from the list or item elements.
+- All events are dispatched from the element with `data-rt-slider`, not from the list or item elements.
 
 ---
 
@@ -355,7 +378,7 @@ It does not rely on console output during normal use. If initialization fails, t
 MIT License
 
 Package: `@rethink-js/rt-slider` <br>
-GitHub: [https://github.com/Rethink-JS/rt-slider](https://github.com/Rethink-JS/rt-slider)
+GitHub: [https://github.com/Rethink-JS/rt-slider](https://github.com/Rethink-JS)
 
 ---
 
