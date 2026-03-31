@@ -1,6 +1,6 @@
 {
   "name": "@rethink-js/rt-slider",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "A lightweight, touch-friendly slider with smooth inertia scrolling and native fallback.",
   "keywords": [
     "javascript",

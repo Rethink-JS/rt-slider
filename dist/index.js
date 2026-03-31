@@ -1,4 +1,4 @@
-/*! @rethink-js/rt-slider v1.1.0 | MIT */
+/*! @rethink-js/rt-slider v1.2.0 | MIT */
 (() => {
   // src/index.js
   (function() {
@@ -117,6 +117,11 @@
     }
     function clamp(i) {
       return i < 0 ? 0 : i > 1 ? 1 : i;
+    }
+    function round(n, d) {
+      if (!Number.isFinite(n)) return 0;
+      var m = Math.pow(10, d || 0);
+      return Math.round(n * m) / m;
     }
     function parseEasing(name) {
       var n = String(name || "").trim();
@@ -310,6 +315,10 @@
       this._injectedKey = null;
       this._lastGutterPx = 0;
       this._lastGapPx = 0;
+      this.slideState = null;
+      this._slideStateSig = "";
+      this._lastSlideStateActiveIndex = -1;
+      this._lastSlideStateScrollLeft = 0;
       var self = this;
       this.ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(function() {
         if (self._roTicking) return;
@@ -522,6 +531,7 @@
       this.updateScrollbar();
       this.updateButtons();
       this.updateOverlays();
+      this.updateSlideState(false);
     };
     Slider.prototype.safeClampScroll = function(x) {
       var clamped = Math.min(Math.max(x, 0), this.maxScroll());
@@ -546,6 +556,7 @@
       this.updateScrollbar();
       this.updateButtons();
       this.updateOverlays();
+      this.updateSlideState(false);
     };
     Slider.prototype.scheduleTouchClamp = function() {
       var self = this;
@@ -567,6 +578,7 @@
         self.updateScrollbar();
         self.updateButtons();
         self.updateOverlays();
+        self.updateSlideState(false);
       }, 90);
     };
     Slider.prototype.onScroll = function() {
@@ -575,6 +587,7 @@
         this.updateScrollbar();
         this.updateButtons();
         this.updateOverlays();
+        this.updateSlideState(false);
         this.scheduleTouchClamp();
         return;
       }
@@ -594,6 +607,7 @@
         self.updateScrollbar();
         self.updateButtons();
         self.updateOverlays();
+        self.updateSlideState(false);
         self.ticking = false;
       });
     };
@@ -643,6 +657,361 @@
         }
       }
       return bestIdx;
+    };
+    Slider.prototype.getItemAnchorScrolls = function(items) {
+      var current = this.safeClampScroll(this.scroller.scrollLeft);
+      var alignLeft = this.getAlignTargetLeft();
+      var anchors = [];
+      var last = -Infinity;
+      for (var i = 0; i < items.length; i++) {
+        var item = items[i];
+        item.setAttribute("data-rt-slider-item-index", String(i));
+        var rect = item.getBoundingClientRect();
+        var raw = current + (rect.left - alignLeft);
+        var anchor = this.safeClampScroll(raw);
+        if (anchor < last) anchor = last;
+        anchors.push(anchor);
+        last = anchor;
+      }
+      return anchors;
+    };
+    Slider.prototype.cloneSlideState = function(state2) {
+      if (!state2) return null;
+      return {
+        sliderId: state2.sliderId,
+        itemCount: state2.itemCount,
+        scroll: {
+          current: state2.scroll.current,
+          max: state2.scroll.max,
+          progress: state2.scroll.progress,
+          progressPercent: state2.scroll.progressPercent,
+          direction: state2.scroll.direction,
+          isAtStart: state2.scroll.isAtStart,
+          isAtEnd: state2.scroll.isAtEnd
+        },
+        active: {
+          index: state2.active.index,
+          element: state2.active.element,
+          anchorScrollLeft: state2.active.anchorScrollLeft,
+          distancePx: state2.active.distancePx
+        },
+        previous: {
+          index: state2.previous.index,
+          element: state2.previous.element
+        },
+        next: {
+          index: state2.next.index,
+          element: state2.next.element
+        },
+        segment: {
+          fromIndex: state2.segment.fromIndex,
+          fromElement: state2.segment.fromElement,
+          toIndex: state2.segment.toIndex,
+          toElement: state2.segment.toElement,
+          progress: state2.segment.progress,
+          progressPercent: state2.segment.progressPercent,
+          distancePx: state2.segment.distancePx,
+          spanPx: state2.segment.spanPx,
+          remainingPx: state2.segment.remainingPx,
+          isBetween: state2.segment.isBetween
+        },
+        slides: state2.slides.map(function(slide) {
+          return {
+            index: slide.index,
+            element: slide.element,
+            anchorScrollLeft: slide.anchorScrollLeft,
+            anchorProgress: slide.anchorProgress,
+            anchorProgressPercent: slide.anchorProgressPercent,
+            distanceFromCurrentPx: slide.distanceFromCurrentPx,
+            isActive: slide.isActive,
+            isPrevious: slide.isPrevious,
+            isNext: slide.isNext,
+            isFrom: slide.isFrom,
+            isTo: slide.isTo,
+            isBeforeActive: slide.isBeforeActive,
+            isAfterActive: slide.isAfterActive
+          };
+        })
+      };
+    };
+    Slider.prototype.dispatchSliderEvent = function(name, detail) {
+      var payload = this.cloneSlideState(detail);
+      try {
+        this.root.dispatchEvent(
+          new CustomEvent(name, {
+            bubbles: true,
+            detail: payload
+          })
+        );
+      } catch (e) {
+        var ev = document.createEvent("CustomEvent");
+        ev.initCustomEvent(name, true, false, payload);
+        this.root.dispatchEvent(ev);
+      }
+    };
+    Slider.prototype.applySlideStateAttributes = function(state2) {
+      var root = this.root;
+      root.setAttribute(
+        "data-rt-slider-active-index",
+        String(state2.active.index)
+      );
+      root.setAttribute(
+        "data-rt-slider-from-index",
+        String(state2.segment.fromIndex)
+      );
+      root.setAttribute("data-rt-slider-to-index", String(state2.segment.toIndex));
+      root.setAttribute(
+        "data-rt-slider-segment-progress",
+        String(round(state2.segment.progress, 6))
+      );
+      root.setAttribute(
+        "data-rt-slider-segment-progress-percent",
+        String(round(state2.segment.progressPercent, 4))
+      );
+      root.setAttribute(
+        "data-rt-slider-scroll-progress",
+        String(round(state2.scroll.progress, 6))
+      );
+      root.setAttribute(
+        "data-rt-slider-scroll-progress-percent",
+        String(round(state2.scroll.progressPercent, 4))
+      );
+      root.setAttribute(
+        "data-rt-slider-scroll-direction",
+        state2.scroll.direction
+      );
+      for (var i = 0; i < state2.slides.length; i++) {
+        var slide = state2.slides[i];
+        var el = slide.element;
+        if (!el) continue;
+        el.setAttribute("data-rt-slider-item-index", String(slide.index));
+        el.setAttribute(
+          "data-rt-slider-item-active",
+          slide.isActive ? "true" : "false"
+        );
+        el.setAttribute(
+          "data-rt-slider-item-from",
+          slide.isFrom ? "true" : "false"
+        );
+        el.setAttribute("data-rt-slider-item-to", slide.isTo ? "true" : "false");
+        el.setAttribute(
+          "data-rt-slider-item-previous",
+          slide.isPrevious ? "true" : "false"
+        );
+        el.setAttribute(
+          "data-rt-slider-item-next",
+          slide.isNext ? "true" : "false"
+        );
+        el.setAttribute(
+          "data-rt-slider-item-before-active",
+          slide.isBeforeActive ? "true" : "false"
+        );
+        el.setAttribute(
+          "data-rt-slider-item-after-active",
+          slide.isAfterActive ? "true" : "false"
+        );
+        el.setAttribute(
+          "data-rt-slider-item-anchor-progress",
+          String(round(slide.anchorProgress, 6))
+        );
+        el.setAttribute(
+          "data-rt-slider-item-anchor-progress-percent",
+          String(round(slide.anchorProgressPercent, 4))
+        );
+        el.setAttribute(
+          "data-rt-slider-item-distance",
+          String(round(slide.distanceFromCurrentPx, 4))
+        );
+      }
+    };
+    Slider.prototype.buildSlideState = function() {
+      var items = this.getOrderedItems();
+      var max = this.maxScroll();
+      var current = this.safeClampScroll(this.scroller.scrollLeft);
+      var prevScroll = this._lastSlideStateScrollLeft;
+      var scrollDirection = "none";
+      if (current > prevScroll + 0.01) scrollDirection = "forward";
+      else if (current < prevScroll - 0.01) scrollDirection = "backward";
+      if (!items.length) {
+        return {
+          sliderId: this.sliderId,
+          itemCount: 0,
+          scroll: {
+            current,
+            max,
+            progress: max > 0 ? clamp(current / max) : 0,
+            progressPercent: max > 0 ? clamp(current / max) * 100 : 0,
+            direction: scrollDirection,
+            isAtStart: current <= 0.5,
+            isAtEnd: current >= max - 0.5
+          },
+          active: {
+            index: -1,
+            element: null,
+            anchorScrollLeft: 0,
+            distancePx: 0
+          },
+          previous: {
+            index: -1,
+            element: null
+          },
+          next: {
+            index: -1,
+            element: null
+          },
+          segment: {
+            fromIndex: -1,
+            fromElement: null,
+            toIndex: -1,
+            toElement: null,
+            progress: 0,
+            progressPercent: 0,
+            distancePx: 0,
+            spanPx: 0,
+            remainingPx: 0,
+            isBetween: false
+          },
+          slides: []
+        };
+      }
+      var anchors = this.getItemAnchorScrolls(items);
+      var nearestIndex = 0;
+      var nearestDistance = Infinity;
+      for (var i = 0; i < anchors.length; i++) {
+        var distance = current - anchors[i];
+        var absDistance = Math.abs(distance);
+        if (absDistance < nearestDistance) {
+          nearestDistance = absDistance;
+          nearestIndex = i;
+        }
+      }
+      var fromIndex = 0;
+      var toIndex = 0;
+      var segmentProgress = 0;
+      var segmentDistance = 0;
+      var segmentSpan = 0;
+      var segmentRemaining = 0;
+      var isBetween = false;
+      if (current <= anchors[0]) {
+        fromIndex = 0;
+        toIndex = 0;
+        segmentProgress = 0;
+        segmentDistance = 0;
+        segmentSpan = 0;
+        segmentRemaining = 0;
+        isBetween = false;
+      } else if (current >= anchors[anchors.length - 1]) {
+        fromIndex = anchors.length - 1;
+        toIndex = anchors.length - 1;
+        segmentProgress = 1;
+        segmentDistance = 0;
+        segmentSpan = 0;
+        segmentRemaining = 0;
+        isBetween = false;
+      } else {
+        for (var j = 0; j < anchors.length - 1; j++) {
+          var a = anchors[j];
+          var b = anchors[j + 1];
+          if (current >= a && current <= b) {
+            fromIndex = j;
+            toIndex = j + 1;
+            segmentSpan = Math.max(0, b - a);
+            segmentDistance = Math.max(0, current - a);
+            segmentProgress = segmentSpan > 0 ? clamp(segmentDistance / segmentSpan) : 0;
+            segmentRemaining = Math.max(0, segmentSpan - segmentDistance);
+            isBetween = current > a && current < b;
+            break;
+          }
+        }
+      }
+      var slides = [];
+      for (var k = 0; k < items.length; k++) {
+        var anchor = anchors[k];
+        var anchorProgress = max > 0 ? clamp(anchor / max) : 0;
+        slides.push({
+          index: k,
+          element: items[k],
+          anchorScrollLeft: anchor,
+          anchorProgress,
+          anchorProgressPercent: anchorProgress * 100,
+          distanceFromCurrentPx: current - anchor,
+          isActive: k === nearestIndex,
+          isPrevious: k === nearestIndex - 1,
+          isNext: k === nearestIndex + 1,
+          isFrom: k === fromIndex,
+          isTo: k === toIndex,
+          isBeforeActive: k < nearestIndex,
+          isAfterActive: k > nearestIndex
+        });
+      }
+      return {
+        sliderId: this.sliderId,
+        itemCount: items.length,
+        scroll: {
+          current,
+          max,
+          progress: max > 0 ? clamp(current / max) : 0,
+          progressPercent: max > 0 ? clamp(current / max) * 100 : 0,
+          direction: scrollDirection,
+          isAtStart: current <= 0.5,
+          isAtEnd: current >= max - 0.5
+        },
+        active: {
+          index: nearestIndex,
+          element: items[nearestIndex] || null,
+          anchorScrollLeft: anchors[nearestIndex] || 0,
+          distancePx: current - (anchors[nearestIndex] || 0)
+        },
+        previous: {
+          index: nearestIndex > 0 ? nearestIndex - 1 : -1,
+          element: nearestIndex > 0 ? items[nearestIndex - 1] : null
+        },
+        next: {
+          index: nearestIndex < items.length - 1 ? nearestIndex + 1 : -1,
+          element: nearestIndex < items.length - 1 ? items[nearestIndex + 1] : null
+        },
+        segment: {
+          fromIndex,
+          fromElement: items[fromIndex] || null,
+          toIndex,
+          toElement: items[toIndex] || null,
+          progress: segmentProgress,
+          progressPercent: segmentProgress * 100,
+          distancePx: segmentDistance,
+          spanPx: segmentSpan,
+          remainingPx: segmentRemaining,
+          isBetween
+        },
+        slides
+      };
+    };
+    Slider.prototype.updateSlideState = function(force) {
+      var state2 = this.buildSlideState();
+      var prevActiveIndex = this._lastSlideStateActiveIndex;
+      var sig = state2.active.index + "|" + state2.segment.fromIndex + "|" + state2.segment.toIndex + "|" + round(state2.segment.progress, 4) + "|" + round(state2.scroll.progress, 4) + "|" + state2.scroll.direction;
+      this.slideState = state2;
+      this.applySlideStateAttributes(state2);
+      this._lastSlideStateScrollLeft = state2.scroll.current;
+      if (force || sig !== this._slideStateSig) {
+        this._slideStateSig = sig;
+        this.dispatchSliderEvent("rtSlider:slide", state2);
+      }
+      if (force || state2.active.index !== prevActiveIndex) {
+        this._lastSlideStateActiveIndex = state2.active.index;
+        this.dispatchSliderEvent("rtSlider:active", state2);
+      }
+    };
+    Slider.prototype.getSlideState = function() {
+      if (!this.slideState) this.updateSlideState(true);
+      return this.cloneSlideState(this.slideState);
+    };
+    Slider.prototype.getActiveIndex = function() {
+      var state2 = this.getSlideState();
+      return state2 && state2.active ? state2.active.index : -1;
+    };
+    Slider.prototype.getActiveElement = function() {
+      var state2 = this.getSlideState();
+      return state2 && state2.active ? state2.active.element : null;
     };
     Slider.prototype.scrollAlignToItem = function(el) {
       if (!el) return;
@@ -972,6 +1341,7 @@
       this.updateScrollbar();
       this.updateButtons();
       this.updateOverlays();
+      this.updateSlideState(false);
       this.barPointerId = null;
     };
     Slider.prototype.detectLinksInItems = function() {
@@ -1077,6 +1447,7 @@
       this.setupCursorMode();
       this.applyIOSScrollIndicatorMask();
       this.applyListStyles();
+      this.updateSlideState(true);
     };
     Slider.prototype.onClickCapture = function(e) {
       if (!this.didDragTs) return;
@@ -1213,6 +1584,7 @@
         self.applyListStyles();
         self.setupCursorMode();
         self.rafUpdate();
+        self.updateSlideState(true);
       };
       if (this.mq.addEventListener)
         this.mq.addEventListener("change", this._onMQ);
@@ -1225,6 +1597,7 @@
           self.setupCursorMode();
           self.applyIOSScrollIndicatorMask();
           self.applyListStyles();
+          self.updateSlideState(true);
         };
         img.addEventListener("load", update, { once: true });
         img.addEventListener("error", update, { once: true });
@@ -1248,7 +1621,7 @@
       if (this.mq.matches) {
         loadLenis().then(function() {
           self.setupLenisInstance();
-        }).catch(function(e) {
+        }).catch(function() {
         });
       }
       this.rafUpdate();
@@ -1256,10 +1629,12 @@
         self.rafUpdate();
         self.applyIOSScrollIndicatorMask();
         self.applyListStyles();
+        self.updateSlideState(true);
       };
       window.addEventListener("load", this._onWL);
       this.setupCursorMode();
       this.bindEvents();
+      this.updateSlideState(true);
     };
     Slider.prototype.destroy = function() {
       this.stopInertia();
@@ -1359,6 +1734,10 @@
         },
         get: function(id) {
           return state.instances[id] || null;
+        },
+        getSlideState: function(id) {
+          var inst = state.instances[id];
+          return inst ? inst.getSlideState() : null;
         },
         refresh: function() {
           var keys = state.order;
