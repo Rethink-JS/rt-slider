@@ -1,4 +1,4 @@
-/*! @rethink-js/rt-slider v1.2.0 | MIT */
+/*! @rethink-js/rt-slider v1.2.1 | MIT */
 (() => {
   // src/index.js
   (function() {
@@ -317,6 +317,7 @@
       this._lastGapPx = 0;
       this.slideState = null;
       this._slideStateSig = "";
+      this._progressSig = "";
       this._lastSlideStateActiveIndex = -1;
       this._lastSlideStateScrollLeft = 0;
       var self = this;
@@ -335,6 +336,9 @@
     Slider.prototype.devicePixelEpsilon = function() {
       var dpr = Math.max(1, window.devicePixelRatio || 1);
       return 1 / dpr;
+    };
+    Slider.prototype.scrollEdgeEpsilon = function() {
+      return Math.max(1, this.devicePixelEpsilon() * 2);
     };
     Slider.prototype.listGap = function() {
       var cs = getComputedStyle(this.list);
@@ -436,6 +440,32 @@
     Slider.prototype.maxScroll = function() {
       return Math.max(0, this.scroller.scrollWidth - this.scroller.clientWidth);
     };
+    Slider.prototype.getLiveScrollMetrics = function() {
+      var max = this.maxScroll();
+      var current = this.safeClampScroll(this.scroller.scrollLeft);
+      var epsilon = this.scrollEdgeEpsilon();
+      if (max <= 0) {
+        return {
+          current: 0,
+          max: 0,
+          progress: 0,
+          progressPercent: 0,
+          isAtStart: true,
+          isAtEnd: true
+        };
+      }
+      if (current <= epsilon) current = 0;
+      if (current >= max - epsilon) current = max;
+      var progress = clamp(current / max);
+      return {
+        current,
+        max,
+        progress,
+        progressPercent: progress * 100,
+        isAtStart: current <= 0,
+        isAtEnd: current >= max
+      };
+    };
     Slider.prototype.updateOverlays = function() {
       if (!this.overlayStart && !this.overlayEnd) return;
       var total = this.scroller.scrollWidth;
@@ -451,13 +481,9 @@
         setVis(this.overlayEnd, false);
         return;
       }
-      var m = this.maxScroll();
-      var current = this.scroller.scrollLeft;
-      var tolerance = 10;
-      var atStart = current <= tolerance;
-      var atEnd = current >= m - tolerance;
-      setVis(this.overlayStart, !atStart);
-      setVis(this.overlayEnd, !atEnd);
+      var metrics = this.getLiveScrollMetrics();
+      setVis(this.overlayStart, !metrics.isAtStart);
+      setVis(this.overlayEnd, !metrics.isAtEnd);
     };
     Slider.prototype.updateButtons = function() {
       if (!this.btnPrev && !this.btnNext) return;
@@ -477,17 +503,13 @@
       }
       if (this.btnPrev) this.btnPrev.style.display = "";
       if (this.btnNext) this.btnNext.style.display = "";
-      var m = this.maxScroll();
-      var current = this.scroller.scrollLeft;
-      var tolerance = 10;
-      var atStart = current <= tolerance;
-      var atEnd = current >= m - tolerance;
+      var metrics = this.getLiveScrollMetrics();
       if (this.btnPrev) {
-        if (atStart) this.btnPrev.classList.add("inactive");
+        if (metrics.isAtStart) this.btnPrev.classList.add("inactive");
         else this.btnPrev.classList.remove("inactive");
       }
       if (this.btnNext) {
-        if (atEnd) this.btnNext.classList.add("inactive");
+        if (metrics.isAtEnd) this.btnNext.classList.add("inactive");
         else this.btnNext.classList.remove("inactive");
       }
     };
@@ -501,10 +523,10 @@
       var avgItemWidth = total / Math.max(1, items + 2);
       var visibleItems = Math.max(1, Math.round(visible / avgItemWidth));
       var barWidth = Math.max(8, visibleItems / (items + 2) * trackWidth);
-      var maxS = Math.max(1, total - visible);
+      var metrics = this.getLiveScrollMetrics();
+      var maxS = Math.max(1, metrics.max);
       var maxX = Math.max(0, trackWidth - barWidth);
-      var progress = Math.min(1, Math.max(0, this.scroller.scrollLeft / maxS));
-      var x = maxX * progress;
+      var x = maxX * metrics.progress;
       return {
         trackWidth,
         barWidth,
@@ -659,7 +681,8 @@
       return bestIdx;
     };
     Slider.prototype.getItemAnchorScrolls = function(items) {
-      var current = this.safeClampScroll(this.scroller.scrollLeft);
+      var metrics = this.getLiveScrollMetrics();
+      var current = metrics.current;
       var alignLeft = this.getAlignTargetLeft();
       var anchors = [];
       var last = -Infinity;
@@ -672,6 +695,13 @@
         if (anchor < last) anchor = last;
         anchors.push(anchor);
         last = anchor;
+      }
+      if (anchors.length) {
+        var max = this.maxScroll();
+        var eps = this.scrollEdgeEpsilon();
+        if (anchors[0] <= eps) anchors[0] = 0;
+        if (anchors[anchors.length - 1] >= max - eps)
+          anchors[anchors.length - 1] = max;
       }
       return anchors;
     };
@@ -734,8 +764,35 @@
         })
       };
     };
+    Slider.prototype.cloneScrollState = function(scroll) {
+      if (!scroll) return null;
+      return {
+        current: scroll.current,
+        max: scroll.max,
+        progress: scroll.progress,
+        progressPercent: scroll.progressPercent,
+        direction: scroll.direction,
+        isAtStart: scroll.isAtStart,
+        isAtEnd: scroll.isAtEnd
+      };
+    };
     Slider.prototype.dispatchSliderEvent = function(name, detail) {
       var payload = this.cloneSlideState(detail);
+      try {
+        this.root.dispatchEvent(
+          new CustomEvent(name, {
+            bubbles: true,
+            detail: payload
+          })
+        );
+      } catch (e) {
+        var ev = document.createEvent("CustomEvent");
+        ev.initCustomEvent(name, true, false, payload);
+        this.root.dispatchEvent(ev);
+      }
+    };
+    Slider.prototype.dispatchProgressEvent = function(name, detail) {
+      var payload = this.cloneScrollState(detail);
       try {
         this.root.dispatchEvent(
           new CustomEvent(name, {
@@ -769,6 +826,14 @@
         String(round(state2.segment.progressPercent, 4))
       );
       root.setAttribute(
+        "data-rt-slider-scroll-current",
+        String(round(state2.scroll.current, 4))
+      );
+      root.setAttribute(
+        "data-rt-slider-scroll-max",
+        String(round(state2.scroll.max, 4))
+      );
+      root.setAttribute(
         "data-rt-slider-scroll-progress",
         String(round(state2.scroll.progress, 6))
       );
@@ -779,6 +844,14 @@
       root.setAttribute(
         "data-rt-slider-scroll-direction",
         state2.scroll.direction
+      );
+      root.setAttribute(
+        "data-rt-slider-scroll-at-start",
+        state2.scroll.isAtStart ? "true" : "false"
+      );
+      root.setAttribute(
+        "data-rt-slider-scroll-at-end",
+        state2.scroll.isAtEnd ? "true" : "false"
       );
       for (var i = 0; i < state2.slides.length; i++) {
         var slide = state2.slides[i];
@@ -826,8 +899,9 @@
     };
     Slider.prototype.buildSlideState = function() {
       var items = this.getOrderedItems();
-      var max = this.maxScroll();
-      var current = this.safeClampScroll(this.scroller.scrollLeft);
+      var metrics = this.getLiveScrollMetrics();
+      var max = metrics.max;
+      var current = metrics.current;
       var prevScroll = this._lastSlideStateScrollLeft;
       var scrollDirection = "none";
       if (current > prevScroll + 0.01) scrollDirection = "forward";
@@ -839,11 +913,11 @@
           scroll: {
             current,
             max,
-            progress: max > 0 ? clamp(current / max) : 0,
-            progressPercent: max > 0 ? clamp(current / max) * 100 : 0,
+            progress: metrics.progress,
+            progressPercent: metrics.progressPercent,
             direction: scrollDirection,
-            isAtStart: current <= 0.5,
-            isAtEnd: current >= max - 0.5
+            isAtStart: metrics.isAtStart,
+            isAtEnd: metrics.isAtEnd
           },
           active: {
             index: -1,
@@ -950,11 +1024,11 @@
         scroll: {
           current,
           max,
-          progress: max > 0 ? clamp(current / max) : 0,
-          progressPercent: max > 0 ? clamp(current / max) * 100 : 0,
+          progress: metrics.progress,
+          progressPercent: metrics.progressPercent,
           direction: scrollDirection,
-          isAtStart: current <= 0.5,
-          isAtEnd: current >= max - 0.5
+          isAtStart: metrics.isAtStart,
+          isAtEnd: metrics.isAtEnd
         },
         active: {
           index: nearestIndex,
@@ -989,9 +1063,14 @@
       var state2 = this.buildSlideState();
       var prevActiveIndex = this._lastSlideStateActiveIndex;
       var sig = state2.active.index + "|" + state2.segment.fromIndex + "|" + state2.segment.toIndex + "|" + round(state2.segment.progress, 4) + "|" + round(state2.scroll.progress, 4) + "|" + state2.scroll.direction;
+      var progressSig = round(state2.scroll.progress, 6) + "|" + round(state2.scroll.current, 4) + "|" + round(state2.scroll.max, 4) + "|" + state2.scroll.direction + "|" + (state2.scroll.isAtStart ? "1" : "0") + "|" + (state2.scroll.isAtEnd ? "1" : "0");
       this.slideState = state2;
       this.applySlideStateAttributes(state2);
       this._lastSlideStateScrollLeft = state2.scroll.current;
+      if (force || progressSig !== this._progressSig) {
+        this._progressSig = progressSig;
+        this.dispatchProgressEvent("rtSlider:progress", state2.scroll);
+      }
       if (force || sig !== this._slideStateSig) {
         this._slideStateSig = sig;
         this.dispatchSliderEvent("rtSlider:slide", state2);
@@ -1004,6 +1083,14 @@
     Slider.prototype.getSlideState = function() {
       if (!this.slideState) this.updateSlideState(true);
       return this.cloneSlideState(this.slideState);
+    };
+    Slider.prototype.getScrollState = function() {
+      var state2 = this.getSlideState();
+      return state2 ? this.cloneScrollState(state2.scroll) : null;
+    };
+    Slider.prototype.getProgress = function() {
+      var scroll = this.getScrollState();
+      return scroll ? scroll.progress : 0;
     };
     Slider.prototype.getActiveIndex = function() {
       var state2 = this.getSlideState();
@@ -1738,6 +1825,14 @@
         getSlideState: function(id) {
           var inst = state.instances[id];
           return inst ? inst.getSlideState() : null;
+        },
+        getScrollState: function(id) {
+          var inst = state.instances[id];
+          return inst ? inst.getScrollState() : null;
+        },
+        getProgress: function(id) {
+          var inst = state.instances[id];
+          return inst ? inst.getProgress() : 0;
         },
         refresh: function() {
           var keys = state.order;
